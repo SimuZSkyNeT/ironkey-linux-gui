@@ -21,6 +21,11 @@ system asking permission to talk to the hardware.
 
 ## Window at a glance
 
+<p align="center">
+  <img src="images/main-window.png" alt="The main window, drive locked" width="420">
+</p>
+
+
 The main window always shows one of five states, and the big button always
 does the sensible next thing:
 

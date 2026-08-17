@@ -9,6 +9,10 @@ projects can unlock a drive that was already set up elsewhere, but none of
 them can perform the first-time setup. This one can, so a Linux-only user
 never has to borrow a Windows machine.
 
+<p align="center">
+  <img src="docs/images/main-window.png" alt="IronKey Locker+ main window" width="420">
+</p>
+
 ## Features
 
 - **Initialize** a brand-new drive (set the first password) — no Windows needed
