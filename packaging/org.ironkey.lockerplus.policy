@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/software/polkit/policyconfig-1.dtd">
+<!--
+  SPDX-License-Identifier: GPL-2.0-only
+
+  Polkit action for IronKey Locker+.
+
+  Two reasons this file exists:
+
+  1. auth_admin_keep lets the authentication persist for a few minutes, so
+     a sequence like unlock -> use -> lock does not ask again and again.
+  2. It lets us write the text of the system dialog ourselves. Without it,
+     polkit shows a generic message naming a Python interpreter path, which
+     tells the user nothing about which of their two passwords to type.
+
+  Installed to /usr/share/polkit-1/actions/ by a system-wide install.
+-->
+<policyconfig>
+
+  <vendor>IronKey Locker+ for Linux</vendor>
+  <vendor_url>https://github.com/SimuZSkyNeT/ironkey-linux-gui</vendor_url>
+  <icon_name>drive-harddisk-usb</icon_name>
+
+  <action id="org.ironkey.lockerplus.manage">
+    <description>Manage an IronKey encrypted drive</description>
+
+    <message>Enter your COMPUTER password, the one you log in with. This is NOT the IronKey drive password.</message>
+
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <!-- Remembered for a few minutes for the active local session, so a
+           whole unlock/use/lock cycle needs one authentication. -->
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/ironkey-lockerplus/ironkey-helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
+  </action>
+
+</policyconfig>

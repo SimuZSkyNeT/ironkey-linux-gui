@@ -1,0 +1,20 @@
+# Vendor material — copyrighted, must never be published
+iso/
+refs/
+*.iso
+*.exe
+*.dylib
+IronKey.app/
+
+# Build artefacts
+build/
+dist/
+*.deb
+*.rpm
+*.pkg.tar.*
+__pycache__/
+*.pyc
+
+# Local state
+vault.json
+settings.json

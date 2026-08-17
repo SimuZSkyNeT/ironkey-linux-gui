@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=IronKey Locker+
+GenericName=Encrypted USB drive
+Comment=Unlock, mount and set up a Kingston IronKey Locker+ drive
+Icon=drive-harddisk-usb
+Terminal=false
+Categories=Utility;System;Security;
+Keywords=ironkey;kingston;usb;encryption;encrypted;drive;
+StartupNotify=true

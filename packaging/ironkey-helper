@@ -1,0 +1,34 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# Fixed-path wrapper for the privileged helper.
+#
+# Polkit authorises a *program path*, not a command line. Calling
+# "pkexec python3 something.py" would make polkit see the interpreter, so
+# the action could never be tied to this application — and the dialog would
+# name a Python path instead of explaining itself. This wrapper gives the
+# policy a stable target.
+#
+# Installed at /usr/libexec/ironkey-lockerplus/ironkey-helper, root-owned.
+set -eu
+
+APPDIR=/usr/share/ironkey-lockerplus
+BACKEND="$APPDIR/ironkey_backend.py"
+
+[ -f "$BACKEND" ] || {
+    echo '{"ok": false, "message": "Helper not found; reinstall the package."}'
+    exit 1
+}
+
+# Prefer an interpreter that can import the crypto library the protocol needs.
+for PY in /usr/bin/python3 /usr/local/bin/python3; do
+    [ -x "$PY" ] || continue
+    # Debian and Ubuntu ship pycryptodome under the Cryptodome namespace;
+    # pip installs usually provide Crypto. Accept either.
+    if "$PY" -c 'import Cryptodome' 2>/dev/null || \
+       "$PY" -c 'import Crypto' 2>/dev/null; then
+        exec "$PY" "$BACKEND" "$@"
+    fi
+done
+
+exec /usr/bin/python3 "$BACKEND" "$@"

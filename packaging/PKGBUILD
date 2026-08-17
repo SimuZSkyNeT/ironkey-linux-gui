@@ -1,0 +1,44 @@
+# SPDX-License-Identifier: GPL-2.0-only
+# Maintainer: Simuz <318048242+SimuZSkyNeT@users.noreply.github.com>
+#
+# Arch Linux / Manjaro package. Build with: makepkg -si
+
+pkgname=ironkey-lockerplus
+pkgver=1.8.1
+pkgrel=1
+pkgdesc="Set up and use Kingston IronKey Locker+ encrypted drives on Linux"
+arch=('any')
+url="https://github.com/SimuZSkyNeT/ironkey-linux-gui"
+license=('GPL2')
+depends=('python' 'python-gobject' 'gtk3' 'python-pycryptodome' 'polkit')
+optdepends=('udisks2: mount without authentication'
+            'exfatprogs: exFAT support'
+            'dosfstools: FAT32 support'
+            'ntfs-3g: NTFS support'
+            'python-cryptography: optional saved-password vault')
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+package() {
+    cd "$srcdir/ironkey-linux-gui-$pkgver"
+    install -dm755 "$pkgdir/usr/share/$pkgname"
+    install -m644 src/*.py "$pkgdir/usr/share/$pkgname/"
+    chmod 755 "$pkgdir/usr/share/$pkgname/ironkey_gui.py" \
+              "$pkgdir/usr/share/$pkgname/ironkey_backend.py"
+
+    install -dm755 "$pkgdir/usr/bin"
+    printf '#!/usr/bin/env bash\nexec python3 /usr/share/%s/ironkey_gui.py "$@"\n' \
+        "$pkgname" > "$pkgdir/usr/bin/ironkey-gui"
+    chmod 755 "$pkgdir/usr/bin/ironkey-gui"
+
+    printf '#!/usr/bin/env bash\nexec python3 /usr/share/%s/ironkey_cli.py "$@"\n' \
+        "$pkgname" > "$pkgdir/usr/bin/ironkey"
+    chmod 755 "$pkgdir/usr/bin/ironkey"
+
+    install -dm755 "$pkgdir/usr/share/applications"
+    sed 's|^Exec=.*|Exec=/usr/bin/ironkey-gui|' ironkey.desktop \
+        > "$pkgdir/usr/share/applications/$pkgname.desktop"
+
+    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+    install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+}
