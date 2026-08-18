@@ -3,7 +3,7 @@
 # Build with: rpmbuild -ba packaging/ironkey-lockerplus.spec
 
 Name:           ironkey-lockerplus
-Version:        1.8.1
+Version:        1.9.0
 Release:        1%{?dist}
 Summary:        Set up and use Kingston IronKey Locker+ encrypted drives
 License:        GPL-2.0-only

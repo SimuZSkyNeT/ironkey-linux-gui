@@ -4,7 +4,7 @@
 # Arch Linux / Manjaro package. Build with: makepkg -si
 
 pkgname=ironkey-lockerplus
-pkgver=1.8.1
+pkgver=1.9.0
 pkgrel=1
 pkgdesc="Set up and use Kingston IronKey Locker+ encrypted drives on Linux"
 arch=('any')

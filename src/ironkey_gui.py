@@ -77,6 +77,12 @@ try:
 except ImportError:
     UPDATE_OK = False
 
+try:
+    import ironkey_deploy as deployer
+    DEPLOY_OK = True
+except ImportError:
+    DEPLOY_OK = False
+
 APP_ID = "org.ironkey.LockerPlus"
 APP_TITLE = APP_NAME
 
@@ -909,6 +915,113 @@ class IronKeyWindow(Gtk.ApplicationWindow):
 
         threading.Thread(target=worker, daemon=True).start()
 
+    # ---------------- carry the app on the drive ----------------
+    def on_deploy(self, _btn):
+        """Copy this application onto the drive, with a checksum manifest."""
+        if not DEPLOY_OK:
+            self.notify_error("The deploy module is missing.")
+            return
+        mp = self.info.get("mountpoint")
+        if not mp:
+            self.notify_error("Mount the drive first.")
+            return
+
+        self.set_busy(True)
+        self.log("→ verifying this installation before copying")
+
+        def worker():
+            state, detail = deployer.verify_source()
+            GLib.idle_add(decide, state, detail)
+
+        def decide(state, detail):
+            self.set_busy(False)
+            self.log(f"  source: {state}")
+
+            if state == "verified":
+                self.confirm(
+                    "Copy the application to the drive?",
+                    f"{detail}\n\n"
+                    f"A folder \u201c{deployer.FOLDER}\u201d will be created "
+                    f"on the drive containing the application, install "
+                    f"instructions, and a SHA-256 manifest so the copy can "
+                    f"be checked later.\n\n"
+                    "It will not start on its own: the drive's firmware does "
+                    "not allow writing to the CD-ROM partition, so the app "
+                    "still has to be installed on the computer using it.",
+                    "Copy", lambda: self._do_deploy(mp))
+            elif state == "modified":
+                self.confirm(
+                    "This installation has been modified",
+                    f"{detail}\n\n"
+                    "Copying it would put files on the drive that do not "
+                    "match the published release. Anyone verifying the copy "
+                    "later would see a mismatch.\n\n"
+                    "Continue only if you changed these files yourself and "
+                    "know what they contain.",
+                    "Copy anyway", lambda: self._do_deploy(mp))
+            else:
+                self.confirm(
+                    "Cannot verify this installation",
+                    f"{detail}\n\n"
+                    "The copy will still carry a SHA-256 manifest, but there "
+                    "is nothing to check the source against right now.",
+                    "Copy anyway", lambda: self._do_deploy(mp))
+            return False
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _do_deploy(self, mountpoint):
+        self.set_busy(True)
+        self.log("→ copying the application to the drive")
+
+        def worker():
+            ok, msg, folder = deployer.deploy(mountpoint)
+            ok2, msg2 = (deployer.verify_copy(mountpoint) if ok
+                         else (False, ""))
+            GLib.idle_add(done, ok, msg, folder, ok2, msg2)
+
+        def done(ok, msg, folder, ok2, msg2):
+            self.set_busy(False)
+            self.log(("  \u2713 " if ok else "  \u2717 ") + msg)
+            if not ok:
+                self.notify_error(msg)
+                return False
+            self.log("  " + ("\u2713 " if ok2 else "\u2717 ") + msg2)
+            self.notify_info(
+                f"{msg}\n\nVerification right after writing:\n{msg2}\n\n"
+                f"Folder: {folder}")
+            self.refresh()
+            return False
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def on_verify_copy(self, _btn):
+        """Re-check a copy already sitting on the drive."""
+        if not DEPLOY_OK:
+            self.notify_error("The deploy module is missing.")
+            return
+        mp = self.info.get("mountpoint")
+        if not mp:
+            self.notify_error("Mount the drive first.")
+            return
+        self.set_busy(True)
+        self.log("→ verifying the copy on the drive")
+
+        def worker():
+            ok, msg = deployer.verify_copy(mp)
+            GLib.idle_add(done, ok, msg)
+
+        def done(ok, msg):
+            self.set_busy(False)
+            self.log(("  \u2713 " if ok else "  \u2717 ") + msg.splitlines()[0])
+            if ok:
+                self.notify_info("Copy on the drive\n\n" + msg)
+            else:
+                self.notify_error("Copy on the drive\n\n" + msg)
+            return False
+
+        threading.Thread(target=worker, daemon=True).start()
+
     # ---------------- updates and publishing ----------------
     def on_check_update(self, _btn):
         if not UPDATE_OK:
@@ -1083,6 +1196,8 @@ class IronKeyWindow(Gtk.ApplicationWindow):
                          ("Verify integrity…", self.on_verify),
                          ("Check filesystem…", self.on_fsck),
                          ("Firmware diagnostics…", self.on_diagnostics),
+                         ("Copy app to drive…", self.on_deploy),
+                         ("Verify copy on drive", self.on_verify_copy),
                          ("Save report…", self.on_report),
                          ("Check for updates…", self.on_check_update),
                          ("Publish my changes…", self.on_publish),

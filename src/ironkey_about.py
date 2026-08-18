@@ -22,7 +22,7 @@ Kept in its own module so the changelog is data, not something buried in
 UI code — and so a release only needs one edit here.
 """
 
-VERSION = "1.8.1"
+VERSION = "1.9.0"
 APP_NAME = "IronKey Locker+"
 TAGLINE = "Set up and use a Kingston IronKey Locker+ drive on Linux"
 
@@ -40,6 +40,17 @@ DONATION_NOTE = ("ETH or any token on any EVM-compatible chain. "
 
 # Newest first. Each entry: (version, date, [changes])
 CHANGELOG = [
+    ("1.9.0", "2026-08-18", [
+        "Copy app to drive: keeps a copy of this application on the drive "
+        "itself, so it travels with it.",
+        "The installation is verified before anything is copied — against "
+        "the package manager's own checksums on a packaged install, or "
+        "against the repository on a git checkout. If it cannot be "
+        "verified, the app says so instead of pretending.",
+        "Every copy carries a SHA-256 manifest and a verify.sh, so it can "
+        "be checked at any time and compared against the published "
+        "release. \"Verify copy on drive\" re-checks it from the menu.",
+    ]),
     ("1.8.1", "2026-08-18", [
         "The polkit dialog is English-only, as the rest of the "
         "application already was.",

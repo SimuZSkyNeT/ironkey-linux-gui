@@ -4,6 +4,12 @@ All notable changes to IronKey Locker+ for Linux.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/), and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.9.0] — 2026-08-18
+
+- Copy app to drive: keeps a copy of this application on the drive itself, so it travels with it.
+- The installation is verified before anything is copied — against the package manager's own checksums on a packaged install, or against the repository on a git checkout. If it cannot be verified, the app says so instead of pretending.
+- Every copy carries a SHA-256 manifest and a verify.sh, so it can be checked at any time and compared against the published release. "Verify copy on drive" re-checks it from the menu.
+
 ## [1.8.1] — 2026-08-18
 
 - The polkit dialog is English-only, as the rest of the application already was.
