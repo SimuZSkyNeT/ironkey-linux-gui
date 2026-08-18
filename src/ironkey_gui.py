@@ -236,8 +236,11 @@ def udisks_mount(device):
     if not shutil.which("udisksctl") or not device:
         return False, "udisksctl not available"
     try:
-        r = subprocess.run(["udisksctl", "mount", "-b", device],
-                           capture_output=True, text=True, timeout=60)
+        r = subprocess.run(["udisksctl", "mount", "--no-user-interaction",
+                            "-b", device],
+                           capture_output=True, text=True, timeout=20)
+    except subprocess.TimeoutExpired:
+        return False, "udisks did not answer in time."
     except Exception as e:
         return False, str(e)
     out = (r.stdout + r.stderr).strip()
@@ -247,11 +250,23 @@ def udisks_mount(device):
 
 
 def udisks_unmount(device):
+    """Unmount through udisks.
+
+    udisks refuses to unmount a filesystem it did not mount itself without
+    an extra authorisation, and will sit waiting for it. A short timeout
+    keeps that from hanging the application: the caller falls back to the
+    privileged helper, which has no such restriction.
+    """
     if not shutil.which("udisksctl") or not device:
         return False, "udisksctl not available"
     try:
-        r = subprocess.run(["udisksctl", "unmount", "-b", device],
-                           capture_output=True, text=True, timeout=60)
+        r = subprocess.run(["udisksctl", "unmount", "--no-user-interaction",
+                            "-b", device],
+                           capture_output=True, text=True, timeout=15)
+    except subprocess.TimeoutExpired:
+        return False, ("udisks did not answer in time — it was probably "
+                       "waiting for an authorisation to unmount a volume "
+                       "it did not mount.")
     except Exception as e:
         return False, str(e)
     out = (r.stdout + r.stderr).strip()

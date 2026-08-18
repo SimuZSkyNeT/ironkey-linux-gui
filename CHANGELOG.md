@@ -6,6 +6,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and versions
 
 ## [1.10.0] — 2026-08-18
 
+- udisks calls no longer hang: they run with a timeout and without interactive prompts, so when udisks refuses to unmount a volume it did not mount, the app falls back instead of freezing.
 - One authentication per session: a single privileged helper is started and authenticated once, then driven over a pipe — the same shape as a system daemon. It only accepts a fixed list of commands, never uses a shell, and exits when the app quits.
 - Fixed a regression: unlocking mounted the drive from the privileged helper, which bypassed udisks and left the volume invisible to the file manager. Mounting is back on udisks, where it needs no password and the desktop can see it.
 - Documentation brought up to date, plus a development guide.

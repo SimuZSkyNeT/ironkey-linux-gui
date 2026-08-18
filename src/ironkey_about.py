@@ -41,6 +41,9 @@ DONATION_NOTE = ("ETH or any token on any EVM-compatible chain. "
 # Newest first. Each entry: (version, date, [changes])
 CHANGELOG = [
     ("1.10.0", "2026-08-18", [
+        "udisks calls no longer hang: they run with a timeout and without "
+        "interactive prompts, so when udisks refuses to unmount a volume "
+        "it did not mount, the app falls back instead of freezing.",
         "One authentication per session: a single privileged helper is "
         "started and authenticated once, then driven over a pipe — the "
         "same shape as a system daemon. It only accepts a fixed list of "
