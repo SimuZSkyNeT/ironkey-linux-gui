@@ -15,7 +15,10 @@ never has to borrow a Windows machine.
 
 ## Features
 
-- **Initialize** a brand-new drive (set the first password) — no Windows needed
+- **Initialize** a brand-new drive (set the first password) — no Windows needed,
+  and the drive is then recognised as set up by Windows and macOS too
+- **Attempts remaining** before the drive erases itself — shown plainly,
+  which no other Linux tool does
 - **Unlock**, mount, unmount, and **lock again** without unplugging
 - **Format** with a choice of exFAT, FAT32, NTFS, ext4 or Btrfs
 - **Built-in file browser**: import, export, create folders, delete
@@ -146,8 +149,10 @@ different models with different protocols.
   and [meikster/ironkey-linux](https://github.com/meikster/ironkey-linux).
 - The **initialization protocol** was reconstructed by analysing the vendor's
   own macOS application, which ships on the drive itself and retains its
-  symbol table. Reverse engineering for interoperability is permitted in the
-  EU under Directive 2009/24/EC, Article 6.
+  symbol table, and by capturing one official initialization over USB. That
+  capture is what revealed the identity record other systems read. Reverse
+  engineering for interoperability is permitted in the EU under Directive
+  2009/24/EC, Article 6.
 
 This project is **not affiliated with, endorsed by, or supported by Kingston
 Technology**. IronKey is a trademark of its respective owner.

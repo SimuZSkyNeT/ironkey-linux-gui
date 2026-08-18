@@ -210,6 +210,31 @@ def show_diagnostics(res):
 
 
 # ----------------------------------------------------------------- main
+def show_attempts(res):
+    left = res.get("attempts_left")
+    total = res.get("attempts_max", 10)
+    print(f"Attempts left : {left} of {total}")
+    if left is not None and left <= 3:
+        print("When they run out the drive erases its key. There is no "
+              "recovery afterwards.")
+
+
+def show_identity(res):
+    """The record that tells other operating systems the drive is set up."""
+    ident = res.get("identity")
+    if not ident:
+        print("No identity record on this drive.")
+        print("It works here, but the vendor's application on Windows and "
+              "macOS would treat it as never set up.")
+        return
+    print("Recognised as initialized : "
+          f"{'yes' if ident.get('initialized') else 'no'}")
+    print(f"Password hint             : {ident.get('hint') or '-'}")
+    print(f"Owner                     : {ident.get('name') or '-'}")
+    print(f"Company                   : {ident.get('company') or '-'}")
+    print(f"Details                   : {ident.get('details') or '-'}")
+
+
 def main():
     ap = argparse.ArgumentParser(
         prog="ironkey",
@@ -238,6 +263,7 @@ def main():
         "umount": "unmount the data area",
         "lock": "unmount and re-encrypt the drive",
         "diagnostics": "low-level firmware query (read-only)",
+        "attempts": "how many password tries are left before erasure",
         "filesystems": "what this machine can format",
         "version": "show the version",
     }
@@ -246,7 +272,18 @@ def main():
 
     sub.add_parser("unlock", help="unlock the drive and mount it",
                    parents=[common])
-    sub.add_parser("init", help="set the first password on a NEW drive",
+    p_init = sub.add_parser("init",
+                            help="set the first password on a NEW drive",
+                            parents=[common])
+    p_init.add_argument("--hint", default="",
+                        help="password reminder written onto the drive and "
+                             "shown at login, here and on Windows and macOS")
+    p_init.add_argument("--owner", default="", help="owner name")
+    p_init.add_argument("--company", default="", help="company")
+    p_init.add_argument("--details", default="", help="contact details")
+
+    sub.add_parser("identity",
+                   help="show the identity other systems read from the drive",
                    parents=[common])
     sub.add_parser("update", help="check GitHub for a newer version",
                    parents=[common])
@@ -308,6 +345,9 @@ def main():
     if args.command == "fsck":
         extra = ["repair" if args.repair else "no"]
 
+    if args.command == "init":
+        extra = [args.hint, args.owner, args.company, args.details]
+
     if args.command in NEEDS_PASSWORD:
         if args.password_stdin:
             password = sys.stdin.readline().rstrip("\n")
@@ -338,6 +378,8 @@ def main():
         "info": show_info,
         "filesystems": show_filesystems,
         "diagnostics": show_diagnostics,
+        "identity": show_identity,
+        "attempts": show_attempts,
     }
     if args.command in presenters:
         presenters[args.command](res)

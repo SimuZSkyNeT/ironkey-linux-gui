@@ -4,6 +4,16 @@ All notable changes to IronKey Locker+ for Linux.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/), and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.11.0] — 2026-08-18
+
+- A drive set up here is now recognised everywhere. Setting the password was only half of initialization: the vendor's own application on Windows and macOS reads a small record on the drive to decide whether it has been set up at all. Without it, that application offered its setup wizard and would have replaced the password. The record is now written during initialization, so the same drive asks for the same password on every operating system.
+- Password hint, owner, company and contact details can be set when initializing, and are shown at login by this application and by the vendor's own.
+- New "Drive identity" window, and an `ironkey identity` command, showing what other systems read from the drive.
+- Attempts remaining: ten consecutive wrong passwords destroy the key, and until now nothing on Linux would tell you how close you were. The count is shown on request (menu, or `ironkey attempts`) and automatically after a wrong password, with a plain warning when little room is left.
+- Fixed: initialization could not work at all — the module that performs it was never included in the package, so the button failed with a missing-module error.
+- Fixed: the drive modules printed their progress onto the same channel the application reads its replies from, which broke every command that reported progress. That output now goes to the error stream.
+- Fixed: releasing the drive ejected `/dev/sr0` whatever it happened to be, which on a machine with a real optical drive opened its tray and left the IronKey alone. Only Kingston devices are ejected now.
+
 ## [1.10.0] — 2026-08-18
 
 - udisks calls no longer hang: they run with a timeout and without interactive prompts, so when udisks refuses to unmount a volume it did not mount, the app falls back instead of freezing.

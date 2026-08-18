@@ -1321,6 +1321,8 @@ class IronKeyWindow(Gtk.ApplicationWindow):
 
         for text, cb in (("Browse files…", self.on_files),
                          ("Drive details…", self.on_details),
+                         ("Drive identity…", self.on_identity),
+                         ("Attempts remaining…", self.on_attempts),
                          ("Speed test…", self.on_benchmark),
                          ("Verify integrity…", self.on_verify),
                          ("Check filesystem…", self.on_fsck),
@@ -1769,7 +1771,7 @@ class IronKeyWindow(Gtk.ApplicationWindow):
                         "unlock", pw,
                         then=lambda r: (self.offer_to_save(pw),
                                         self.mount_action())
-                        if r.get("ok") else None))
+                        if r.get("ok") else self.report_attempts()))
 
             self.try_saved_password(proceed)
         elif self.state == RAW:
@@ -1925,7 +1927,114 @@ class IronKeyWindow(Gtk.ApplicationWindow):
                 "lowercase, digits, symbols.\n"
                 "Write it down — without it the data cannot be recovered.",
                 confirm=True,
-                on_ok=lambda pw: self.run("init", pw)))
+                on_ok=lambda pw: self.ask_identity(
+                    lambda ident: self.run("init", pw, args=ident))))
+
+    # ------------------------------------------------------------------
+    def ask_identity(self, on_ok):
+        """Ask for the hint and owner details written onto the drive.
+
+        These are not decoration: they are the record that tells every other
+        system the drive has already been set up. A drive initialized without
+        it works here, but the vendor's own application on Windows and macOS
+        offers to set it up again — and that would replace the password.
+        """
+        dlg = Gtk.Dialog(title="Drive identity", transient_for=self,
+                         modal=True)
+        dlg.add_button("Skip", Gtk.ResponseType.REJECT)
+        ok_btn = dlg.add_button("Continue", Gtk.ResponseType.OK)
+        style(ok_btn, "suggested-action")
+        dlg.set_default_response(Gtk.ResponseType.OK)
+
+        content = dlg.get_content_area()
+        content.set_spacing(10)
+        for m in ("set_margin_top", "set_margin_bottom",
+                  "set_margin_start", "set_margin_end"):
+            getattr(content, m)(16)
+
+        intro = wrap_label(Gtk.Label(
+            label="This is written onto the drive itself, so Windows and "
+                  "macOS recognise it as already set up and ask for the "
+                  "password instead of offering to set it up again."))
+        intro.set_xalign(0)
+        add(content, intro)
+
+        entries = {}
+        for key, placeholder in (("hint", "Password hint (shown at login)"),
+                                 ("name", "Owner name (optional)"),
+                                 ("company", "Company (optional)"),
+                                 ("details", "Contact details (optional)")):
+            e = Gtk.Entry()
+            e.set_placeholder_text(placeholder)
+            e.set_max_length(95)
+            e.set_activates_default(True)
+            add(content, e)
+            entries[key] = e
+
+        warn = wrap_label(style(Gtk.Label(
+            label="The hint is readable by anyone holding the drive, so keep "
+                  "it a reminder, not the password."), "dim"))
+        warn.set_xalign(0)
+        add(content, warn)
+
+        def on_response(d, resp):
+            values = {k: e.get_text().strip() for k, e in entries.items()}
+            d.destroy()
+            if resp == Gtk.ResponseType.OK:
+                on_ok((values["hint"], values["name"],
+                       values["company"], values["details"]))
+            elif resp == Gtk.ResponseType.REJECT:
+                on_ok(("", "", "", ""))
+
+        dlg.connect("response", on_response)
+        show(dlg)
+
+    def on_attempts(self, _btn):
+        self.run("attempts", then=self._present_attempts)
+
+    def report_attempts(self):
+        """After a wrong password, say plainly how much room is left."""
+        self.run("attempts", then=self._present_attempts)
+
+    def _present_attempts(self, res):
+        if not res.get("ok"):
+            return
+        left = res.get("attempts_left")
+        total = res.get("attempts_max", 10)
+        if left is None:
+            return
+        if left <= 3:
+            self.notify_error(
+                f"{left} of {total} attempts left.\n\n"
+                "When they run out the drive erases its key, and the data "
+                "cannot be recovered by any means.")
+        else:
+            self.notify_info(f"{left} of {total} password attempts left.")
+
+    def on_identity(self, _btn):
+        """Show the identity record as other operating systems read it."""
+        self.run("identity", then=self._present_identity)
+
+    def _present_identity(self, res):
+        if not res.get("ok"):
+            return
+        ident = res.get("identity")
+        if not ident:
+            self.notify_info(
+                "This drive carries no identity record.\n\n"
+                "It works here, but the vendor's application on Windows and "
+                "macOS would treat it as never set up and offer to "
+                "initialize it, replacing the password.")
+            return
+        rows = [("Password hint", ident.get("hint") or "—"),
+                ("Owner", ident.get("name") or "—"),
+                ("Company", ident.get("company") or "—"),
+                ("Details", ident.get("details") or "—")]
+        text = "\n".join(f"{k}: {v}" for k, v in rows)
+        self.notify_info(
+            "Recognised as initialized by Windows and macOS.\n\n" + text
+            if ident.get("initialized") else
+            "Recorded, but not marked as initialized.\n\n" + text)
 
     # ------------------------------------------------------------------
     def ask_password(self, title, subtitle, hint, confirm, on_ok):
@@ -2006,6 +2115,13 @@ class IronKeyWindow(Gtk.ApplicationWindow):
             if r == Gtk.ResponseType.OK:
                 on_ok()
         dlg.connect("response", resp)
+        show(dlg)
+
+    def notify_info(self, text):
+        dlg = Gtk.MessageDialog(transient_for=self, modal=True,
+                                message_type=Gtk.MessageType.INFO,
+                                buttons=Gtk.ButtonsType.OK, text=text)
+        dlg.connect("response", lambda d, *_: d.destroy())
         show(dlg)
 
     def notify_error(self, text):

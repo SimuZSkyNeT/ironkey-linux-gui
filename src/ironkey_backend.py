@@ -550,6 +550,23 @@ def read_password():
     return sys.stdin.readline().rstrip("\n").rstrip("\r")
 
 
+def _logs_to_stderr():
+    """Keep the device modules' running commentary off stdout.
+
+    Replies to the front-end are one JSON line on stdout, and in helper mode
+    exactly one line is read back. Anything the device modules print would be
+    read in its place, so their log goes to stderr, where it stays available
+    for debugging.
+    """
+    def to_stderr(msg=""):
+        print(msg, file=sys.stderr, flush=True)
+
+    for name in ("ironkey_unlock", "ironkey_init", "ironkey_metadata"):
+        mod = sys.modules.get(name)
+        if mod is not None and hasattr(mod, "log"):
+            mod.log = to_stderr
+
+
 def open_hid():
     """Find the HID interface, switching the device into HID mode if needed.
 
@@ -559,10 +576,18 @@ def open_hid():
 
     import ironkey_unlock as iu
     try:
-        from ironkey_status import unmount_ironkey_volumes
-        iu.unmount_volumes = unmount_ironkey_volumes
+        # Replaces the unlocker's own release, which ejects /dev/sr0 whatever
+        # that happens to be: on a machine with an optical drive it opens that
+        # tray and leaves the IronKey alone.
+        import ironkey_metadata
+        ironkey_metadata.install_safe_unmount()
     except ImportError:
-        pass
+        try:
+            from ironkey_status import unmount_ironkey_volumes
+            iu.unmount_volumes = unmount_ironkey_volumes
+        except ImportError:
+            pass
+    _logs_to_stderr()
 
     hidraw, _ = iu.find_ironkey_hidraw()
     if not hidraw:
@@ -775,19 +800,30 @@ def cmd_lock():
                        "visible. Unplug the drive to be sure.")
 
 
-def cmd_init():
+def cmd_init(hint="", name="", company="", details=""):
+    """Set the first password, and record the identity that other systems read.
+
+    The identity record is written in the same session as the password. It is
+    what makes the vendor's own application on Windows and macOS treat the
+    drive as initialized; without it, that application offers its setup wizard
+    and would overwrite the password just set.
+    """
     password = read_password()
     if not password:
         return emit(False, "No password provided.")
     if len(password.encode("utf-8")) > 16:
         return emit(False, "Password too long: 16 bytes maximum.")
 
-    from ironkey_init import read_private_area, send_init
-
     fd, iu = open_hid()
     if fd is None:
         return emit(False, iu)
 
+    from ironkey_init import read_private_area, send_init
+    _logs_to_stderr()
+
+    identity = {"hint": hint, "name": name,
+                "company": company, "details": details}
+    cross_platform = True
     try:
         shared = iu.rsa_handshake(fd)
         area = read_private_area(fd)
@@ -796,7 +832,16 @@ def cmd_init():
                                "stopping to be safe.")
         if area["dword2"] != 0:
             return emit(False, "Unexpected state (dword2 != 0); stopping.")
-        send_init(fd, shared, password, area, dry_run=False)
+        try:
+            send_init(fd, shared, password, area, dry_run=False,
+                      identity=identity)
+        except iu.IronKeyError as e:
+            # The password is the part that must not be left half-done. If the
+            # drive refuses the identity record, say so plainly rather than
+            # reporting a failure that did not happen.
+            if "0x62" not in str(e):
+                raise
+            cross_platform = False
     except iu.IronKeyError as e:
         return emit(False, f"Initialization failed: {e}")
     finally:
@@ -804,7 +849,77 @@ def cmd_init():
             os.close(fd)
         except OSError:
             pass
+
+    if not cross_platform:
+        return emit(True, "Password set, but the identity record could not be "
+                          "written: this drive will work here, while the "
+                          "vendor's application would offer to set it up "
+                          "again. The data area now needs formatting.")
     return emit(True, "Password set. The data area now needs formatting.")
+
+
+def cmd_attempts():
+    """How many password attempts are left before the drive erases itself.
+
+    Ten consecutive failures destroy the key, and no Linux tool has ever
+    shown this. The count of failures already spent is part of the private
+    area structure; a successful unlock puts it back to zero.
+    """
+    fd, iu = open_hid()
+    if fd is None:
+        return emit(False, iu)
+
+    from ironkey_init import read_private_area, attempts_from_area, MAX_ATTEMPTS
+    _logs_to_stderr()
+    try:
+        area = read_private_area(fd)
+        used, left = attempts_from_area(area)
+    except iu.IronKeyError as e:
+        return emit(False, f"Could not read the attempt counter: {e}")
+    finally:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+
+    if used is None:
+        return emit(False, "The attempt counter reads an unexpected value.")
+    if left == 0:
+        message = ("No attempts left: the next wrong password erases the "
+                   "data permanently.")
+    elif left <= 3:
+        message = (f"Only {left} attempts left before the data is erased "
+                   f"permanently.")
+    else:
+        message = f"{left} of {MAX_ATTEMPTS} attempts left."
+    return emit(True, message, attempts_left=left, attempts_used=used,
+                attempts_max=MAX_ATTEMPTS)
+
+
+def cmd_identity():
+    """Read the identity record: hint and owner details, as other systems see them."""
+    fd, iu = open_hid()
+    if fd is None:
+        return emit(False, iu)
+
+    import ironkey_metadata as meta
+    _logs_to_stderr()
+    try:
+        meta.open_session(fd)
+        info = meta.read_record(fd)
+    except iu.IronKeyError as e:
+        return emit(False, f"Could not read the identity record: {e}")
+    finally:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+
+    if info is None:
+        return emit(True, "This drive carries no identity record: the "
+                          "vendor's application would treat it as never "
+                          "initialized.", identity=None)
+    return emit(True, "Identity record read.", identity=info)
 
 
 
@@ -880,6 +995,8 @@ COMMANDS = {
     "lock": cmd_lock,
     "format": cmd_format,
     "init": cmd_init,
+    "identity": cmd_identity,
+    "attempts": cmd_attempts,
     "serve": cmd_serve,
 }
 

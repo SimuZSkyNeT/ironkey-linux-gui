@@ -64,11 +64,21 @@ A drive fresh from the shop has no password. Setting one is a one-off.
    - 6 to 16 characters
    - at least three of: uppercase, lowercase, digits, symbols
    - **write it down somewhere safe** — there is no recovery
-4. Authenticate with your computer password when the system asks.
-5. The state becomes **Unlocked — not formatted**. Press **Format now…**,
+4. Fill in the **Drive identity** step: a password hint, and optionally your
+   name, company and contact details. This is written onto the drive itself,
+   and it is what makes Windows and macOS recognise the drive as already set
+   up — without it, the vendor's own application offers to initialize it
+   again, which would replace your password. Keep the hint a reminder: anyone
+   holding the drive can read it. You may skip the step, and the drive still
+   works here.
+5. Authenticate with your computer password when the system asks.
+6. The state becomes **Unlocked — not formatted**. Press **Format now…**,
    pick a filesystem (exFAT is preselected and recommended), give the
    volume a name, and confirm.
-6. Done. The drive mounts and is ready to use.
+7. Done. The drive mounts and is ready to use.
+
+To see what other systems read from the drive, open **Menu → Drive
+identity…**.
 
 > Initialization is only for a drive that has never been set up. On a drive
 > that already holds data, it makes that data permanently unreadable.

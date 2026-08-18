@@ -22,7 +22,7 @@ Kept in its own module so the changelog is data, not something buried in
 UI code — and so a release only needs one edit here.
 """
 
-VERSION = "1.10.0"
+VERSION = "1.11.0"
 APP_NAME = "IronKey Locker+"
 TAGLINE = "Set up and use a Kingston IronKey Locker+ drive on Linux"
 
@@ -40,6 +40,33 @@ DONATION_NOTE = ("ETH or any token on any EVM-compatible chain. "
 
 # Newest first. Each entry: (version, date, [changes])
 CHANGELOG = [
+    ("1.11.0", "2026-08-18", [
+        "A drive set up here is now recognised everywhere. Setting the "
+        "password was only half of it: the vendor's own application on "
+        "Windows and macOS reads a small record on the drive to decide "
+        "whether it has been set up at all, and without that record it "
+        "offered its setup wizard and would have replaced the password. "
+        "The record is now written during initialization, so the same "
+        "drive asks for the same password on every operating system.",
+        "Password hint, owner, company and contact details can be set when "
+        "initializing, and are shown at login by this application and by "
+        "the vendor's own.",
+        "New \"Drive identity\" window, and an `ironkey identity` command, "
+        "showing what other systems read from the drive.",
+        "Attempts remaining. Ten consecutive wrong passwords destroy the "
+        "key, and until now nothing on Linux would tell you how close you "
+        "were. The count is now shown on request, and automatically after "
+        "a wrong password, with a plain warning when little room is left.",
+        "Fixed: initialization could not work at all — the module that "
+        "performs it was never included in the package, so the button "
+        "failed with a missing-module error.",
+        "Fixed: the drive modules printed progress onto the channel the "
+        "application reads its replies from, which broke every command "
+        "that reported progress. That output now goes to the error stream.",
+        "Fixed: releasing the drive ejected /dev/sr0 whatever it happened "
+        "to be, which on a machine with an optical drive opened its tray "
+        "and left the IronKey alone. Only Kingston devices are ejected now.",
+    ]),
     ("1.10.0", "2026-08-18", [
         "udisks calls no longer hang: they run with a timeout and without "
         "interactive prompts, so when udisks refuses to unmount a volume "

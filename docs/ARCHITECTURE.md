@@ -26,11 +26,32 @@ How the pieces fit together, for anyone reading or changing the code.
 └───────────────┬──────────────────────────┘
                 │
 ┌───────────────▼──────────────────────────┐
+│  ironkey_init.py      first password     │
+│  ironkey_metadata.py  identity record    │
+└───────────────┬──────────────────────────┘
+                │
+┌───────────────▼──────────────────────────┐
 │  ironkey_unlock.py    THIRD PARTY, GPL-2 │
 │  RSA-512 handshake, HID transport,       │
 │  PID switch, unlock sequence             │
 └──────────────────────────────────────────┘
 ```
+
+## Why initialization is two writes, not one
+
+Setting the password configures the key that protects the data, and that is
+all the drive needs to work. It is not all the vendor's own application needs:
+on Windows and macOS it reads a small record from two protected pages to
+decide whether the drive has ever been set up. A drive with a password but no
+record looks brand new to it, so it offers its setup wizard — and going
+through that wizard replaces the password.
+
+So initialization writes both, in the same session: the key, then the record.
+The record is encrypted with a fixed key taken from the vendor's binary, and
+its pages are opened with a password carried in the command itself. Those
+page commands exist only inside an open secure session; asked for outside
+one, the firmware answers "invalid command operation code", which reads like
+a device that does not implement them at all.
 
 The GUI never runs as root. Only the helper does, and only for the
 operations that genuinely need it.
@@ -192,6 +213,8 @@ code does not branch.
 | `ironkey_deploy.py` | verified copy of the app onto the drive |
 | `ironkey_update.py` | release checks and developer publishing |
 | `ironkey_cli.py` | terminal interface over the same helper |
+| `ironkey_init.py` | sets the first password on a fresh drive |
+| `ironkey_metadata.py` | the identity record other systems read |
 | `ironkey_unlock.py` | third-party unlock protocol (GPL-2) |
 
 ## Adding a command
