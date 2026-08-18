@@ -76,5 +76,12 @@ embedding it in the script.
 
 ## Not available here
 
-The file browser, the saved-password vault and appearance settings are
-graphical by nature and exist only in the GUI.
+The file browser, the saved-password vault, the appearance settings and
+"copy app to drive" are graphical by nature and exist only in the GUI.
+
+## Where authentication comes from
+
+Commands needing root re-run themselves through `sudo` when you are in a
+terminal, or `pkexec` when a desktop session is available. On a system-wide
+install a polkit action means the authentication is remembered for a few
+minutes, so a sequence of commands asks once.

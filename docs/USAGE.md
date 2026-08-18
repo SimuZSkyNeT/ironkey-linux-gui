@@ -19,6 +19,20 @@ system asking permission to talk to the hardware.
 > The drive erases its own encryption key. This is built into the hardware
 > and no software can undo it. Wrong *computer* passwords are harmless.
 
+## How often you are asked for a password
+
+**Once per session.** The first privileged operation starts a helper that
+stays alive until you close the application, so you authenticate once and
+not again. On a system-wide install the system dialog also explains
+*which* password it wants, since the app registers its own polkit action.
+
+Mounting and unmounting go through udisks and need **no** authentication
+at all.
+
+With a per-user install (`./install.sh` without `--system`) the polkit
+action cannot be registered, so each privileged operation asks again. The
+application works either way.
+
 ## Window at a glance
 
 <p align="center">
@@ -114,6 +128,34 @@ read-only; no password is sent, so the attempt counter is untouched.
 **Save report** — writes everything to a text file, useful when reporting a
 problem.
 
+## Carrying the application on the drive
+
+**☰ → Copy app to drive…** puts a copy of this application in a folder on
+the data partition, so it travels with the drive.
+
+It does **not** start on its own. The drive's firmware refuses writes to
+its CD-ROM partition — the only area that could auto-run — so on a new
+computer the application still has to be installed. What the copy gives
+you is everything needed to do that, without downloading anything.
+
+Two checks come with it:
+
+**Before copying**, the installation is verified. On a packaged install
+that means asking the package manager whether every file still matches the
+checksums recorded when the package was built (`dpkg -V`). On a git
+checkout it means comparing against the repository. If neither applies,
+the app says so rather than implying a check it cannot perform. If files
+have been modified you are told exactly which, and can decide.
+
+**After copying**, the folder carries `MANIFEST.sha256` — a SHA-256 for
+every file — plus a `verify.sh` that re-checks them using nothing but
+`sha256sum`. **☰ → Verify copy on drive** does the same from the menu.
+
+One honest limit: a manifest detects later tampering, but someone who
+replaced the files *and* regenerated the manifest would pass. The only
+real anchor is the published release, which is why the copy's README says
+to compare the hashes against the matching tag on GitHub.
+
 ## Remembering the drive password
 
 Optional, off by default. **☰ → Saved password…**
@@ -130,6 +172,18 @@ gatekeeper and does not pretend to be.
 
 Forgetting the saved password costs you nothing but convenience — the drive
 still opens by typing the device password.
+
+## Updates
+
+**☰ → Check for updates** asks GitHub for the newest release.
+
+- Installed from a package: you are pointed at your package manager or the
+  release page. The app will not overwrite files the package manager owns.
+- Running from a git checkout: it offers to pull the new code, and refuses
+  if you have uncommitted changes, so nothing of yours is lost.
+
+Nothing happens automatically. Fetching code from the internet and running
+it is remote code execution by design, so it always waits for you.
 
 ## Appearance
 

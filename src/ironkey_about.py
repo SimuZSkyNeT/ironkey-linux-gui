@@ -22,7 +22,7 @@ Kept in its own module so the changelog is data, not something buried in
 UI code — and so a release only needs one edit here.
 """
 
-VERSION = "1.9.0"
+VERSION = "1.10.0"
 APP_NAME = "IronKey Locker+"
 TAGLINE = "Set up and use a Kingston IronKey Locker+ drive on Linux"
 
@@ -40,6 +40,17 @@ DONATION_NOTE = ("ETH or any token on any EVM-compatible chain. "
 
 # Newest first. Each entry: (version, date, [changes])
 CHANGELOG = [
+    ("1.10.0", "2026-08-18", [
+        "One authentication per session: a single privileged helper is "
+        "started and authenticated once, then driven over a pipe — the "
+        "same shape as a system daemon. It only accepts a fixed list of "
+        "commands, never uses a shell, and exits when the app quits.",
+        "Fixed a regression: unlocking mounted the drive from the "
+        "privileged helper, which bypassed udisks and left the volume "
+        "invisible to the file manager. Mounting is back on udisks, where "
+        "it needs no password and the desktop can see it.",
+        "Documentation brought up to date, plus a development guide.",
+    ]),
     ("1.9.0", "2026-08-18", [
         "Copy app to drive: keeps a copy of this application on the drive "
         "itself, so it travels with it.",

@@ -117,6 +117,42 @@ The diagnostics need the drive connected and the helper authenticated. If
 the session fails, the report says so instead of showing empty values.
 These are read-only queries and never touch the attempt counter.
 
+## "Copy app to drive" says the installation is modified
+
+The application checked itself against your package manager (`dpkg -V`) or
+against the repository, and something no longer matches. That is not
+necessarily an attack — editing a file yourself produces the same result.
+
+To see exactly what changed:
+
+```bash
+dpkg -V ironkey-lockerplus          # packaged install
+git status --porcelain              # git checkout
+```
+
+If you did not change anything and the list is not empty, reinstall from
+the published release before copying anything onto a drive.
+
+## Verifying a copy on the drive fails
+
+Run the check directly, so you see which files differ:
+
+```bash
+cd /path/to/drive/IronKey-Linux-App
+./verify.sh
+```
+
+A `FAILED` line means that file changed after the manifest was written.
+Delete the folder and copy the application again.
+
+## The system password is asked at every step
+
+The polkit action only exists on a system-wide install. With a per-user
+install (`./install.sh` without `--system`) each privileged operation
+authenticates separately. Installing the `.deb`, or running
+`sudo ./install.sh --system`, registers the action and one authentication
+then covers several operations.
+
 ## Reporting a problem
 
 Use **☰ → Save report**, which collects device state and configuration into

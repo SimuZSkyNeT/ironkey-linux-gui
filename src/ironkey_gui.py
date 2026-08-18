@@ -281,6 +281,10 @@ def privileged_prefix():
 
 
 def run_backend(command, password=None, privileged=True, args=()):
+    # Privileged work goes through the long-lived helper, so the user is
+    # asked to authenticate once per session rather than per operation.
+    if privileged:
+        return HELPER.send(command, args, password)
     argv = []
     if privileged:
         prefix = privileged_prefix()
@@ -318,6 +322,115 @@ def _spawn(argv, password):
         return {"ok": False, "message": "Authorization denied."}
     return {"ok": False,
             "message": (proc.stderr or "").strip() or "No reply from backend."}
+
+
+
+# --------------------------------------------------------------------------
+# Persistent privileged helper
+# --------------------------------------------------------------------------
+class Helper:
+    """One authenticated helper process for the whole session.
+
+    Without this, every privileged operation goes through pkexec and asks
+    again. Here the helper is started once, authenticated once, and then
+    fed requests over a pipe until the application quits — the same shape
+    as a system daemon like udisks.
+
+    It is deliberately not a general-purpose root shell: the helper only
+    accepts a fixed list of command names, never involves a shell, and
+    exits the moment its stdin closes.
+    """
+
+    def __init__(self):
+        self.proc = None
+        self.lock = threading.Lock()
+
+    def alive(self):
+        return self.proc is not None and self.proc.poll() is None
+
+    def start(self):
+        """Spawn and authenticate. Returns (ok, message)."""
+        if self.alive():
+            return True, "already running"
+        prefix = privileged_prefix()
+        if not prefix:
+            return False, "Neither pkexec nor sudo is available."
+        argv = list(prefix)
+        if prefix[0] == "pkexec" and has_polkit_action():
+            argv += [POLKIT_HELPER, "serve"]
+        else:
+            argv += [PYTHON, BACKEND, "serve"]
+        try:
+            self.proc = subprocess.Popen(
+                argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE, text=True, bufsize=1)
+        except Exception as e:
+            self.proc = None
+            return False, f"Could not start the helper: {e}"
+
+        line = self.proc.stdout.readline()
+        if not line:
+            code = self.proc.poll()
+            err = ""
+            try:
+                err = (self.proc.stderr.read() or "").strip()
+            except Exception:
+                pass
+            self.proc = None
+            if code == 126:
+                return False, "Authorization denied."
+            return False, err or "The helper did not start."
+        try:
+            first = json.loads(line.strip())
+        except ValueError:
+            self.proc = None
+            return False, "Unexpected reply from the helper."
+        if not first.get("serving"):
+            # It answered, but refused to serve — report its own reason.
+            self.proc = None
+            return False, first.get("message", "The helper refused to start.")
+        return True, first.get("message", "")
+
+    def send(self, command, args=(), password=None):
+        """Run one command through the live helper."""
+        with self.lock:
+            if not self.alive():
+                ok, msg = self.start()
+                if not ok:
+                    return {"ok": False, "message": msg}
+            req = {"command": command, "args": [str(a) for a in args]}
+            if password is not None:
+                req["password"] = password
+            try:
+                self.proc.stdin.write(json.dumps(req) + "\n")
+                self.proc.stdin.flush()
+                line = self.proc.stdout.readline()
+            except Exception as e:
+                self.proc = None
+                return {"ok": False, "message": f"Helper connection lost: {e}"}
+            if not line:
+                self.proc = None
+                return {"ok": False, "message": "The helper stopped."}
+            try:
+                return json.loads(line.strip())
+            except ValueError:
+                return {"ok": False, "message": "Unreadable reply."}
+
+    def stop(self):
+        if self.alive():
+            try:
+                self.proc.stdin.write('{"command": "quit"}\n')
+                self.proc.stdin.flush()
+                self.proc.wait(timeout=5)
+            except Exception:
+                try:
+                    self.proc.terminate()
+                except Exception:
+                    pass
+        self.proc = None
+
+
+HELPER = Helper()
 
 
 # --------------------------------------------------------------------------
@@ -454,6 +567,7 @@ class IronKeyWindow(Gtk.ApplicationWindow):
         set_child(logexp, scroll)
         add(outer, logexp, True)
 
+        self.connect("destroy", lambda *_: HELPER.stop())
         self.log(f"{APP_NAME} {VERSION}")
         self.log(f"Backend interpreter: {PYTHON}")
         self.refresh()
@@ -1638,7 +1752,8 @@ class IronKeyWindow(Gtk.ApplicationWindow):
                     confirm=False,
                     on_ok=lambda pw: self.run(
                         "unlock", pw,
-                        then=lambda r: self.offer_to_save(pw)
+                        then=lambda r: (self.offer_to_save(pw),
+                                        self.mount_action())
                         if r.get("ok") else None))
 
             self.try_saved_password(proceed)
@@ -1773,7 +1888,10 @@ class IronKeyWindow(Gtk.ApplicationWindow):
                 f"named \"{name}\" will be created.\n\n"
                 "This cannot be undone.",
                 "Erase and format",
-                lambda: self.run("format", args=(chosen, name)))
+                lambda: self.run(
+                    "format", args=(chosen, name),
+                    then=lambda r: self.mount_action()
+                    if r.get("ok") else None))
 
         dlg.connect("response", on_response)
         show(dlg)

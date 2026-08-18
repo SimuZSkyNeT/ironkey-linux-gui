@@ -27,6 +27,8 @@ never has to borrow a Windows machine.
   (scrypt + AES-256-GCM)
 - Light / dark / follow-system appearance
 - **Command-line interface** for SSH, scripts and headless machines
+- **Carry the app on the drive**, with a SHA-256 manifest and a source
+  check against your package manager before anything is copied
 - Update checking against GitHub releases
 
 ## Requirements
@@ -156,6 +158,7 @@ Technology**. IronKey is a trademark of its respective owner.
 - [Command line](docs/CLI.md) — terminal usage and scripting
 - [Troubleshooting](docs/TROUBLESHOOTING.md) — when something goes wrong
 - [Architecture](docs/ARCHITECTURE.md) — how it is built, for contributors
+- [Development](docs/DEVELOPMENT.md) — building, packaging and releasing
 - [Changelog](CHANGELOG.md)
 
 ## Author

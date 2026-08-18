@@ -611,14 +611,12 @@ def cmd_unlock():
         dev, size = find_data_device()
         if dev:
             msg = f"Unlocked: {dev} ({size / (1 << 30):.1f} GiB)"
-            # Mount in the same privileged run, so the user authenticates once.
-            mounted, mmsg, mp = do_mount()
-            if mounted:
-                msg += f". {mmsg}"
-            elif "format" in mmsg:
-                msg += ". Not mounted: no filesystem yet."
+            # Deliberately NOT mounted here. The caller mounts through
+            # udisks, which needs no authentication and — unlike a
+            # privileged mount — registers the volume with the desktop so
+            # the file manager actually shows it.
             return emit(True, msg, state="unlocked", device=dev,
-                        mountpoint=mp)
+                        mountpoint="")
     return emit(False, "Commands sent but the data area did not appear.")
 
 
@@ -716,15 +714,13 @@ def cmd_format(fstype=None, label=None):
     if r.returncode != 0:
         return emit(False, f"Format failed: {(r.stderr or r.stdout).strip()}")
 
-    # Mount right away, in this same privileged run: one authentication
-    # for the whole operation instead of two.
+    # Let the kernel notice the new filesystem, then leave mounting to the
+    # caller: udisks does it without a password and registers it with the
+    # desktop.
     subprocess.run(["udevadm", "settle"], capture_output=True)
     time.sleep(1)
-    mounted, mmsg, mp = do_mount()
-    msg = f"{fs['name']} filesystem created (label \"{lbl}\")."
-    if mounted:
-        msg += f" {mmsg}"
-    return emit(True, msg, fstype=key, mountpoint=mp)
+    return emit(True, f"{fs['name']} filesystem created (label \"{lbl}\").",
+                fstype=key, mountpoint="")
 
 
 def cmd_lock():
@@ -811,6 +807,67 @@ def cmd_init():
     return emit(True, "Password set. The data area now needs formatting.")
 
 
+
+def cmd_serve():
+    """Stay alive and execute commands from stdin, one JSON request per line.
+
+    This is what lets the application authenticate once instead of at every
+    operation. It is the same shape as a system daemon such as udisks: a
+    privileged process that only ever performs a fixed set of operations,
+    driven by an unprivileged front-end.
+
+    The safety properties that matter:
+      - only names in COMMANDS are accepted; anything else is refused
+      - no shell is ever involved, arguments are passed as a list
+      - the process exits as soon as stdin closes, i.e. when the GUI quits
+      - a password arrives in its request line and is never logged
+
+    Request : {"command": "unlock", "args": [], "password": "..."}
+    Reply   : one JSON line, exactly as the one-shot commands produce.
+    """
+    print(json.dumps({"ok": True, "message": "helper ready",
+                      "serving": True}), flush=True)
+
+    for line in sys.stdin:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            req = json.loads(line)
+        except ValueError:
+            emit(False, "Malformed request.")
+            continue
+
+        name = req.get("command", "")
+        if name == "quit":
+            emit(True, "helper stopping")
+            return 0
+        if name not in COMMANDS or name == "serve":
+            emit(False, f"Unknown command: {name}")
+            continue
+
+        args = [str(a) for a in (req.get("args") or [])]
+        password = req.get("password")
+
+        # The one-shot commands read a password from stdin; here it comes
+        # in the request, so feed it through a temporary stand-in.
+        if password is not None:
+            import io
+            real_stdin, sys.stdin = sys.stdin, io.StringIO(password + "\n")
+            try:
+                COMMANDS[name](*args)
+            except Exception as e:
+                emit(False, f"{type(e).__name__}: {e}")
+            finally:
+                sys.stdin = real_stdin
+        else:
+            try:
+                COMMANDS[name](*args)
+            except Exception as e:
+                emit(False, f"{type(e).__name__}: {e}")
+    return 0
+
+
 COMMANDS = {
     "status": cmd_status,
     "info": cmd_info,
@@ -823,6 +880,7 @@ COMMANDS = {
     "lock": cmd_lock,
     "format": cmd_format,
     "init": cmd_init,
+    "serve": cmd_serve,
 }
 
 # Commands that work fine without root, so the GUI never asks needlessly.

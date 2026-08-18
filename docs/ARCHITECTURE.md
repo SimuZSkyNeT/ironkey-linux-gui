@@ -10,7 +10,12 @@ How the pieces fit together, for anyone reading or changing the code.
 │  GTK window, state machine, dialogs      │
 │  ironkey_files.py   file browser         │
 │  ironkey_vault.py   encrypted vault      │
+│  ironkey_deploy.py  copy app to drive    │
+│  ironkey_update.py  releases, publishing │
 │  ironkey_about.py   version, changelog   │
+│                                          │
+│  ironkey_cli.py     same backend,        │
+│                     no desktop needed    │
 └───────────────┬──────────────────────────┘
                 │  pkexec, one JSON line per reply
                 │  password on stdin, never in argv
@@ -103,6 +108,63 @@ password even before any drive password has been saved.
 scrypt at n=2^16 costs about 64 MB and half a second per attempt —
 unnoticeable once, ruinous for a brute-force run.
 
+## Authentication and polkit
+
+`pkexec` authorises a **program path**, not a command line. Invoking
+`pkexec python3 backend.py` would make polkit see the interpreter, so the
+action could never be tied to this application — and its dialog would name
+a Python path instead of explaining itself.
+
+A system-wide install therefore ships a fixed-path wrapper at
+`/usr/libexec/ironkey-lockerplus/ironkey-helper` and a policy declaring
+`org.ironkey.lockerplus.manage` with `auth_admin_keep`. That gives the
+dialog our own wording and lets one authentication cover several
+operations. The GUI detects whether both files exist and falls back to
+plain `pkexec python3 backend.py` when they do not, so a per-user install
+still works — it just asks more often.
+
+## One authentication per session
+
+Asking for the system password at every operation is tiring, and the
+obvious fix — caching sudo for the whole session — is the wrong one: it
+grants root to *anything*, not just this application.
+
+Instead a single helper is started once, authenticated once, and then fed
+requests over a pipe until the application quits. This is the shape of a
+system daemon such as udisks: a privileged process that performs a fixed
+set of operations on behalf of an unprivileged front-end.
+
+```
+GUI  --pkexec (once)-->  helper serve
+     --{"command": "unlock", "password": "..."}\n-->
+     <--{"ok": true, "message": "..."}\n--
+```
+
+What keeps this reasonable:
+
+- only names in `COMMANDS` are accepted; anything else is refused
+- no shell is ever involved; arguments are passed as a list
+- the helper exits as soon as its stdin closes, i.e. when the GUI quits
+- passwords travel inside the request, never in `argv`
+
+`status`, `info` and `fstypes` still run unprivileged and bypass the
+helper entirely, which is why the window can poll the device every few
+seconds without ever prompting.
+
+## Verifying what gets copied
+
+`ironkey_deploy.py` never copies blindly. It first asks whoever installed
+this software whether the files are still the ones that were installed:
+`dpkg -V` (or `rpm -V`) against the package manager's recorded checksums,
+or `git status` against the repository. The three outcomes — verified,
+modified, unverifiable — are reported as they are, and the third is not
+dressed up as the first.
+
+Each copy then carries a SHA-256 manifest and a standalone `verify.sh`.
+The manifest catches later tampering; it cannot catch someone who replaces
+the files and regenerates it, which is why the copy points at the
+published release as the real anchor of trust.
+
 ## Portability
 
 No hardcoded paths. The helper looks for `ironkey_unlock.py` beside itself,
@@ -127,6 +189,9 @@ code does not branch.
 | `ironkey_files.py` | built-in file browser, confined to the drive |
 | `ironkey_vault.py` | encrypted store for the drive password |
 | `ironkey_about.py` | version and changelog as data |
+| `ironkey_deploy.py` | verified copy of the app onto the drive |
+| `ironkey_update.py` | release checks and developer publishing |
+| `ironkey_cli.py` | terminal interface over the same helper |
 | `ironkey_unlock.py` | third-party unlock protocol (GPL-2) |
 
 ## Adding a command
