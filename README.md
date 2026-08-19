@@ -19,6 +19,7 @@ never has to borrow a Windows machine.
   and the drive is then recognised as set up by Windows and macOS too
 - **Attempts remaining** before the drive erases itself — shown plainly,
   which no other Linux tool does
+- **Change the password** without reinitializing, so the data stays put
 - **Unlock**, mount, unmount, and **lock again** without unplugging
 - **Format** with a choice of exFAT, FAT32, NTFS, ext4 or Btrfs
 - **Built-in file browser**: import, export, create folders, delete

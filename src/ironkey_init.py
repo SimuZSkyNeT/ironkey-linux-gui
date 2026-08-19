@@ -145,6 +145,64 @@ def send_init(fd, shared, password, area, user_id_count=1, dry_run=True,
     return True
 
 
+def send_change_password(fd, shared, old_password, new_password,
+                         domain=DOMAIN, user_id_index=0):
+    """Change the password while keeping the data readable.
+
+    Initialization (FF A2) configures a new key for the private area, which
+    is why it leaves whatever was stored unreadable. Changing the password is
+    a different command, FF A6: the key stays, only what unwraps it changes.
+
+    The payload is thirty-two plaintext bytes — the old password in the first
+    sixteen, the new one in the next sixteen, each padded with zeros — then
+    encrypted as a whole with the session key, exactly as the vendor's own
+    application builds it.
+    """
+    for label, pw in (("old", old_password), ("new", new_password)):
+        if len(pw.encode("utf-8")) > 16:
+            raise IronKeyError(f"The {label} password is longer than the "
+                               f"16 bytes the device accepts.")
+
+    plaintext = (old_password.encode("utf-8").ljust(16, b"\x00")
+                 + new_password.encode("utf-8").ljust(16, b"\x00"))
+    encrypted = AES_ECB_encrypt_32(shared, plaintext)
+
+    log("--- opening the secure session (FF 8B / FF 8A / FF 8F) ---")
+    send_hid(fd, 0x8B, 0x00, "none",
+             cdb3_10=bytes([0x00, 0x03, 0, 0, 0, 0, 0, 0]))
+    try:
+        send_hid(fd, 0x8A, 0x00, "read", data_len=8)
+    except IronKeyError:
+        pass                      # informativo: la sessione regge lo stesso
+    send_hid(fd, 0x8F, 0x00, "write", data=encrypt_pvc_key(PVC0_KEY, shared),
+             cdb3_10=bytes([0x02, 0, 0, 0, 0, 0, 0, 0]))
+
+    log("--- sending FF A6 ---")
+    send_hid(fd, 0xA6, 0x00, "write", data=encrypted, data_len=len(encrypted),
+             cdb3_10=bytes([domain, user_id_index, 0, 0, 0, 0, 0, 0]))
+
+    # The commit is what actually makes it stick. Without it the drive
+    # acknowledges the change and quietly keeps the old password — the
+    # command is inside the vendor's caller, not inside the routine that
+    # builds it, which is why reading the binary alone did not show it.
+    log("--- commit (FF 89) ---")
+    send_hid(fd, 0x89, 0x00, "none")
+
+    log("--- terminating the session ---")
+    send_hid(fd, 0x8F, 0x00, "none",
+             cdb3_10=bytes([0x03, 0, 0, 0, 0, 0, 0, 0]))
+    return True
+
+
+def AES_ECB_encrypt_32(key, plaintext):
+    """Both blocks under the session key, in one go, as the vendor does."""
+    try:
+        from Crypto.Cipher import AES
+    except ImportError:
+        from Cryptodome.Cipher import AES
+    return AES.new(key, AES.MODE_ECB).encrypt(plaintext)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Set the first password on a factory-fresh IronKey "

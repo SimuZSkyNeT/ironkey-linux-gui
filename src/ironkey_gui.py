@@ -1323,6 +1323,7 @@ class IronKeyWindow(Gtk.ApplicationWindow):
                          ("Drive details…", self.on_details),
                          ("Drive identity…", self.on_identity),
                          ("Attempts remaining…", self.on_attempts),
+                         ("Change drive password…", self.on_changepw),
                          ("Speed test…", self.on_benchmark),
                          ("Verify integrity…", self.on_verify),
                          ("Check filesystem…", self.on_fsck),
@@ -1989,6 +1990,99 @@ class IronKeyWindow(Gtk.ApplicationWindow):
         dlg.connect("response", on_response)
         show(dlg)
 
+    def on_changepw(self, _btn):
+        """Change the drive password, keeping everything that is on it."""
+        dlg = Gtk.Dialog(title="Change drive password", transient_for=self,
+                         modal=True)
+        dlg.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        ok_btn = dlg.add_button("Change password", Gtk.ResponseType.OK)
+        style(ok_btn, "suggested-action")
+        dlg.set_default_response(Gtk.ResponseType.OK)
+
+        content = dlg.get_content_area()
+        content.set_spacing(10)
+        for m in ("set_margin_top", "set_margin_bottom",
+                  "set_margin_start", "set_margin_end"):
+            getattr(content, m)(16)
+
+        intro = wrap_label(Gtk.Label(
+            label="The files on the drive stay where they are: only the "
+                  "password that unlocks them changes."))
+        intro.set_xalign(0)
+        add(content, intro)
+
+        fields = {}
+        for key, placeholder in (("current", "Current drive password"),
+                                 ("new", "New password"),
+                                 ("repeat", "Repeat the new password")):
+            e = Gtk.Entry()
+            e.set_visibility(False)
+            e.set_placeholder_text(placeholder)
+            e.set_activates_default(True)
+            add(content, e)
+            fields[key] = e
+
+        chk = Gtk.CheckButton(label="Show passwords")
+
+        def toggled(b):
+            for e in fields.values():
+                e.set_visibility(b.get_active())
+        chk.connect("toggled", toggled)
+        add(content, chk)
+
+        rules = wrap_label(style(Gtk.Label(
+            label="6 to 16 characters, using at least three of: uppercase, "
+                  "lowercase, digits, symbols. A wrong current password "
+                  "counts towards the ten that erase the drive."), "dim"))
+        rules.set_xalign(0)
+        add(content, rules)
+
+        def on_response(d, resp):
+            cur = fields["current"].get_text()
+            new = fields["new"].get_text()
+            rep = fields["repeat"].get_text()
+            d.destroy()
+            if resp != Gtk.ResponseType.OK:
+                return
+            if not cur or not new:
+                self.notify_error("Both passwords are needed.")
+            elif new != rep:
+                self.notify_error("The two new passwords do not match.")
+            elif new == cur:
+                self.notify_error("The new password is the same as the "
+                                  "current one.")
+            elif len(new.encode("utf-8")) > 16:
+                self.notify_error("The new password is too long: the device "
+                                  "accepts 16 bytes at most.")
+            else:
+                # Both travel on the password channel, one per line, so
+                # neither ever appears in a command line.
+                self.run("changepw", cur + "\n" + new,
+                         then=lambda r: self.password_changed(new)
+                         if r.get("ok") else self.report_attempts())
+
+        dlg.connect("response", on_response)
+        show(dlg)
+
+    def password_changed(self, new_password):
+        """A remembered password is wrong the moment the drive changes it."""
+        note = ""
+        if VAULT_OK and self.vault_key is not None:
+            try:
+                vault.set_secret(self.vault_key, new_password)
+                note = "\n\nThe remembered password was updated too."
+                self.log("  the remembered password was updated")
+            except Exception as e:
+                note = ("\n\nThe remembered password could NOT be updated "
+                        f"({e}) — it will no longer work.")
+        elif VAULT_OK and vault.exists():
+            note = ("\n\nA remembered password is stored but the vault is "
+                    "locked, so it still holds the old one. Unlock it and "
+                    "save the password again.")
+        self.notify_info("Password changed.\n\nThe files on the drive are "
+                         "untouched, and the next unlock needs the new "
+                         "password." + note)
+
     def on_attempts(self, _btn):
         self.run("attempts", then=self._present_attempts)
 
@@ -2115,13 +2209,6 @@ class IronKeyWindow(Gtk.ApplicationWindow):
             if r == Gtk.ResponseType.OK:
                 on_ok()
         dlg.connect("response", resp)
-        show(dlg)
-
-    def notify_info(self, text):
-        dlg = Gtk.MessageDialog(transient_for=self, modal=True,
-                                message_type=Gtk.MessageType.INFO,
-                                buttons=Gtk.ButtonsType.OK, text=text)
-        dlg.connect("response", lambda d, *_: d.destroy())
         show(dlg)
 
     def notify_error(self, text):

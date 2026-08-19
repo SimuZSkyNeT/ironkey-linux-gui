@@ -52,6 +52,8 @@ BACKEND = os.path.join(HERE, "ironkey_backend.py")
 UNPRIVILEGED = {"status", "info", "fstypes"}
 # Commands that need a password on stdin.
 NEEDS_PASSWORD = {"unlock", "init"}
+# Two passwords on one channel, current first: never in a command line.
+NEEDS_TWO_PASSWORDS = {"passwd"}
 
 
 def is_root():
@@ -282,6 +284,9 @@ def main():
     p_init.add_argument("--company", default="", help="company")
     p_init.add_argument("--details", default="", help="contact details")
 
+    sub.add_parser("passwd", help="change the drive password, keeping data",
+                   parents=[common])
+
     sub.add_parser("identity",
                    help="show the identity other systems read from the drive",
                    parents=[common])
@@ -347,6 +352,20 @@ def main():
 
     if args.command == "init":
         extra = [args.hint, args.owner, args.company, args.details]
+
+    if args.command in NEEDS_TWO_PASSWORDS:
+        command = "changepw"
+        if args.password_stdin:
+            current = sys.stdin.readline().rstrip("\n")
+            replacement = sys.stdin.readline().rstrip("\n")
+        else:
+            print("Changing the drive password. The files on the drive are "
+                  "not touched.")
+            print("A wrong current password counts towards the ten that "
+                  "erase the drive.\n")
+            current = ask_password("Current drive password: ")
+            replacement = ask_password("New password: ", confirm=True)
+        password = current + "\n" + replacement
 
     if args.command in NEEDS_PASSWORD:
         if args.password_stdin:

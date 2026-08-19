@@ -22,7 +22,7 @@ Kept in its own module so the changelog is data, not something buried in
 UI code — and so a release only needs one edit here.
 """
 
-VERSION = "1.11.0"
+VERSION = "1.12.1"
 APP_NAME = "IronKey Locker+"
 TAGLINE = "Set up and use a Kingston IronKey Locker+ drive on Linux"
 
@@ -40,6 +40,23 @@ DONATION_NOTE = ("ETH or any token on any EVM-compatible chain. "
 
 # Newest first. Each entry: (version, date, [changes])
 CHANGELOG = [
+    ("1.12.1", "2026-08-19", [
+        "Fixed the password change, which reported success while the drive "
+        "kept the old password: the command needs a commit afterwards, and "
+        "only takes effect on a drive that is already open. The change now "
+        "unlocks with the current password first, then commits.",
+    ]),
+    ("1.12.0", "2026-08-19", [
+        "Change the drive password without losing what is on it. Until now "
+        "the only way to set a different password was to initialize the "
+        "drive again, which configures a new key and leaves everything "
+        "stored on it unreadable. This is the other command the vendor's "
+        "software uses: the key stays, only what unwraps it changes.",
+        "A remembered password is updated at the same time, so it does not "
+        "quietly go stale; if the vault is locked, the application says so "
+        "instead of leaving you to find out at the next unlock.",
+        "Also available as `ironkey passwd`.",
+    ]),
     ("1.11.0", "2026-08-18", [
         "A drive set up here is now recognised everywhere. Setting the "
         "password was only half of it: the vendor's own application on "

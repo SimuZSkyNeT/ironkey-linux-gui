@@ -858,6 +858,71 @@ def cmd_init(hint="", name="", company="", details=""):
     return emit(True, "Password set. The data area now needs formatting.")
 
 
+def cmd_changepw():
+    """Change the drive password without losing what is on it.
+
+    Two passwords arrive on the same channel, one per line: the current one
+    first, then the new one. Initialization would also set a password, but it
+    configures a new key and leaves the data unreadable; this does not.
+    """
+    current = read_password()
+    replacement = read_password()
+    if not current or not replacement:
+        return emit(False, "Both the current and the new password are needed.")
+    if current == replacement:
+        return emit(False, "The new password is the same as the current one.")
+    for label, pw in (("current", current), ("new", replacement)):
+        if len(pw.encode("utf-8")) > 16:
+            return emit(False, f"The {label} password is too long: "
+                               f"16 bytes maximum.")
+
+    fd, iu = open_hid()
+    if fd is None:
+        return emit(False, iu)
+
+    from ironkey_init import send_change_password
+    _logs_to_stderr()
+
+    # The drive only accepts the change once the current password has been
+    # accepted: on a locked drive the command is acknowledged and quietly
+    # ignored. So it is a login first, then the change in a fresh session —
+    # which is also the order the vendor's own application uses, since it
+    # offers "change password" only on a drive that is already open.
+    try:
+        shared = iu.rsa_handshake(fd)
+        iu.send_unlock(fd, shared, current)
+    except iu.IronKeyError as e:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+        return emit(False, f"The current password was not accepted: {e}")
+
+    try:
+        os.close(fd)
+    except OSError:
+        pass
+
+    # Unlocking re-enumerates the device, so the interface is found again.
+    time.sleep(2)
+    fd, iu = open_hid()
+    if fd is None:
+        return emit(False, f"The drive was unlocked but went missing: {iu}")
+
+    try:
+        shared = iu.rsa_handshake(fd)
+        send_change_password(fd, shared, current, replacement)
+    except iu.IronKeyError as e:
+        return emit(False, f"The password was not changed: {e}")
+    finally:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+    return emit(True, "Password changed. The data on the drive is untouched, "
+                      "and the next unlock needs the new password.")
+
+
 def cmd_attempts():
     """How many password attempts are left before the drive erases itself.
 
@@ -997,6 +1062,7 @@ COMMANDS = {
     "init": cmd_init,
     "identity": cmd_identity,
     "attempts": cmd_attempts,
+    "changepw": cmd_changepw,
     "serve": cmd_serve,
 }
 

@@ -38,6 +38,7 @@ ironkey lock                         # re-encrypt without unplugging
 ironkey format --fs exfat --label WORK
 ironkey format --fs ext4 --label BACKUP --yes    # no confirmation
 
+ironkey passwd                       # change the password, keep the data
 ironkey attempts                     # tries left before the data is erased
 ironkey identity                     # what Windows and macOS read from it
 ironkey init --hint "office laptop"  # first password, plus the identity record
